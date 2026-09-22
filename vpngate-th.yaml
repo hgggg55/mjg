@@ -1,9 +1,9 @@
 proxies:
-  # score=819455 ping=14ms speed=84.7Mbps uptime_min=173675565 country=TH
-  - name: VG-TH-171.4.218.224
+  # score=754263 ping=5ms speed=215.9Mbps uptime_min=75571565 country=TH
+  - name: VG-TH-27.130.22.67
     type: openvpn
-    server: 171.4.218.224
-    port: 1479
+    server: 27.130.22.67
+    port: 1904
     proto: udp
     udp: true
     cipher: AES-128-CBC
@@ -42,11 +42,11 @@ proxies:
       mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
       emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
       -----END CERTIFICATE-----
-  # score=694816 ping=16ms speed=69.3Mbps uptime_min=63289565 country=TH
-  - name: VG-TH-49.237.200.60
+  # score=741341 ping=5ms speed=364.1Mbps uptime_min=87212565 country=TH
+  - name: VG-TH-27.130.56.125
     type: openvpn
-    server: 49.237.200.60
-    port: 1770
+    server: 27.130.56.125
+    port: 1672
     proto: udp
     udp: true
     cipher: AES-128-CBC
@@ -85,11 +85,11 @@ proxies:
       mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
       emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
       -----END CERTIFICATE-----
-  # score=601440 ping=7ms speed=132.8Mbps uptime_min=0 country=TH
-  - name: VG-TH-27.130.100.231
+  # score=641872 ping=11ms speed=88.0Mbps uptime_min=0 country=TH
+  - name: VG-TH-171.4.228.114
     type: openvpn
-    server: 27.130.100.231
-    port: 1297
+    server: 171.4.228.114
+    port: 1500
     proto: udp
     udp: true
     cipher: AES-128-CBC
@@ -128,11 +128,11 @@ proxies:
       mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
       emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
       -----END CERTIFICATE-----
-  # score=577628 ping=11ms speed=87.8Mbps uptime_min=0 country=TH
-  - name: VG-TH-27.130.171.237
+  # score=609506 ping=6ms speed=661.1Mbps uptime_min=0 country=TH
+  - name: VG-TH-58.136.224.45
     type: openvpn
-    server: 27.130.171.237
-    port: 1420
+    server: 58.136.224.45
+    port: 1682
     proto: udp
     udp: true
     cipher: AES-128-CBC
@@ -171,12 +171,12 @@ proxies:
       mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
       emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
       -----END CERTIFICATE-----
-  # score=567070 ping=9ms speed=351.7Mbps uptime_min=0 country=TH
-  - name: VG-TH-223.204.226.101
+  # score=609098 ping=4ms speed=359.3Mbps uptime_min=0 country=TH
+  - name: VG-TH-110.77.228.100
     type: openvpn
-    server: 223.204.226.101
-    port: 1315
-    proto: udp
+    server: 110.77.228.100
+    port: 1960
+    proto: tcp
     udp: true
     cipher: AES-128-CBC
     auth: SHA1
