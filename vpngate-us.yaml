@@ -1,9 +1,9 @@
 proxies:
-  # score=4005463 ping=11ms speed=144.6Mbps uptime_min=569825175 country=US
-  - name: VG-US-38.71.123.196
+  # score=524875 ping=9ms speed=319.5Mbps uptime_min=0 country=US
+  - name: VG-US-47.141.29.68
     type: openvpn
-    server: 38.71.123.196
-    port: 1363
+    server: 47.141.29.68
+    port: 1845
     proto: tcp
     udp: true
     cipher: AES-128-CBC
