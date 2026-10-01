@@ -22,13 +22,6 @@ jobs:
           pip install pyyaml
           python3 convert.py
 
-      - name: Move artifacts to repo root
-        run: |
-          mv dist/vpngate.yaml .
-          mv dist/vpngate-jp.yaml .
-          mv dist/vpngate-kr.yaml .
-          rm -rf dist
-
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
