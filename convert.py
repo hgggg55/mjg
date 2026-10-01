@@ -11,6 +11,7 @@ vpngate.yaml(全量) + vpngate-jp/kr/us/th.yaml(分地区)
 """
 import base64
 import csv
+import os
 import re
 import socket
 import time
@@ -26,7 +27,6 @@ CSV_URLS = [
 ]
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 REGIONS = ["JP", "KR"]
-MAX_NODES = {"ALL": 40, "JP": 30, "KR": 30}
 OUT_ALL = "vpngate.yaml"
 
 # ── 筛选阈值 ──────────────────────────────────────────────
@@ -40,6 +40,8 @@ TCP_TEST_MAX = 80       # 最多同时测这么多节点
 W_PING = 0.40    # ping 越低越好
 W_SPEED = 0.35   # 速度越高越好
 W_SCORE = 0.25   # VPNGate 原始分数
+
+MAX_NODES = {"ALL": 40, "JP": 30, "KR": 30}
 
 
 class _Dumper(yaml.SafeDumper):
@@ -237,10 +239,7 @@ def dump(path: str, nodes):
                          sort_keys=False, default_flow_style=False, width=4096).rstrip()
         indented = "\n".join("  " + l if l.strip() else l for l in body.split("\n"))
         lines.append(indented)
-    out_path = f"dist/{path}"
-    import os
-    os.makedirs("dist", exist_ok=True)
-    with open(out_path, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 
 
@@ -255,8 +254,8 @@ def main():
         made = to_node(d)
         if not made:
             continue
-        node, ping, speed, score, uptime = made
-        nodes.append((node, ping, speed, score, uptime))
+    node, ping, speed, score, uptime = made
+    nodes.append((node, ping, speed, score, uptime))
     print(f"解析成功: {len(nodes)} 节点")
 
     # TCP 可达性检测
