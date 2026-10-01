@@ -237,7 +237,10 @@ def dump(path: str, nodes):
                          sort_keys=False, default_flow_style=False, width=4096).rstrip()
         indented = "\n".join("  " + l if l.strip() else l for l in body.split("\n"))
         lines.append(indented)
-    with open(path, "w", encoding="utf-8") as f:
+    out_path = f"dist/{path}"
+    import os
+    os.makedirs("dist", exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 
 
