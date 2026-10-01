@@ -22,7 +22,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import yaml
 
 CSV_URLS = [
-    "https://www.vpngate.net/api/iphone/",
     "https://raw.githubusercontent.com/sinspired/VpngateAPI/main/servers.csv",
 ]
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
@@ -68,7 +67,7 @@ def fetch_csv() -> str:
             req = urllib.request.Request(url, headers={"User-Agent": UA})
             with urllib.request.urlopen(req, timeout=30) as r:
                 text = r.read().decode("utf-8", errors="ignore")
-            if "#Host" in text[:2000] or "#HostName" in text[:2000]:
+            if "#HostName" in text[:2000]:
                 print(f"数据源 OK: {url} ({len(text)} B)")
                 return text
             print(f"数据源非CSV, 跳过: {url}")
@@ -83,19 +82,21 @@ def parse_csv(text: str):
     header, rows = None, []
     for line in text.splitlines():
         line = line.rstrip("\r")
-        if line.startswith("#Host") and "," in line[:22]:
+        if line.startswith("#HostName") and "," in line:
             header = [h.lstrip("#").strip() for h in line.split(",")]
             continue
         if not header or line.startswith("*") or not line.strip():
             continue
         vals = next(csv.reader([line]))
-        if len(vals) == len(header):
-            rows.append(dict(zip(header, vals)))
-        elif len(vals) > len(header):
-            extra = len(vals) - len(header)
-            fixed = vals[:13] + [",".join(vals[13:14 + extra])] + vals[14 + extra:]
-            if len(fixed) == len(header):
-                rows.append(dict(zip(header, fixed)))
+        if len(vals) < 11:
+            continue
+        if len(vals) == 11:
+            row = dict(zip(header, vals))
+        else:
+            # 新格式: 11基础列 + LogType/Operator/Message/OpenVPN_ConfigData_Base64
+            extra_header = header + ["LogType", "Operator", "Message", "OpenVPN_ConfigData_Base64"]
+            row = dict(zip(extra_header, vals))
+        rows.append(row)
     return rows
 
 
@@ -254,8 +255,8 @@ def main():
         made = to_node(d)
         if not made:
             continue
-    node, ping, speed, score, uptime = made
-    nodes.append((node, ping, speed, score, uptime))
+        node, ping, speed, score, uptime = made
+        nodes.append((node, ping, speed, score, uptime))
     print(f"解析成功: {len(nodes)} 节点")
 
     # TCP 可达性检测
