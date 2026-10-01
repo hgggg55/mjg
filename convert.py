@@ -1,25 +1,45 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""vpngate 官方 CSV -> Clash(mihomo) openvpn yaml
-输出: vpngate.yaml(全量) + vpngate-jp/kr/us/th.yaml(分地区)
-节点按 Score 降序, 命名 VG-{国家}-{IP}, 与 VG2C 同风格
+"""vpngate 官方 CSV -> Clash(mihomo) openvpn yaml 输出:
+vpngate.yaml(全量) + vpngate-jp/kr/us/th.yaml(分地区)
+
+新增:
+  - TCP 可达性检测 (过滤不可用节点)
+  - 综合评分排序 (ping + speed + score 加权)
+  - 阈值筛选 (ping / speed / score)
+  - Mihomo proxy-provider 友好格式
 """
 import base64
 import csv
 import re
+import socket
+import time
 import urllib.request
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import yaml
 
 CSV_URLS = [
-    "https://www.vpngate.net/api/iphone/",  # 官方源(筑波大学)
-    "https://raw.githubusercontent.com/sinspired/VpngateAPI/main/servers.csv",  # 镜像CSV
+    "https://www.vpngate.net/api/iphone/",
+    "https://raw.githubusercontent.com/sinspired/VpngateAPI/main/servers.csv",
 ]
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 REGIONS = ["JP", "KR"]
-OUT_ALL = "vpngate.yaml"  # 全量文件
-MAX_NODES = {"ALL": 40, "JP": 30, "KR": 30}  # 各文件节点上限(按score降序截断)
+MAX_NODES = {"ALL": 40, "JP": 30, "KR": 30}
+OUT_ALL = "vpngate.yaml"
+
+# ── 筛选阈值 ──────────────────────────────────────────────
+PING_MAX_MS = 250       # 超过此 ping 淘汰
+SPEED_MIN_MBPS = 5      # 低于此速度淘汰
+SCORE_MIN = 300000      # 低于此分数淘汰
+TCP_TIMEOUT = 4         # TCP 连接超时(秒)
+TCP_TEST_MAX = 80       # 最多同时测这么多节点
+
+# ── 综合评分权重 ──────────────────────────────────────────
+W_PING = 0.40    # ping 越低越好
+W_SPEED = 0.35   # 速度越高越好
+W_SCORE = 0.25   # VPNGate 原始分数
 
 
 class _Dumper(yaml.SafeDumper):
@@ -70,12 +90,25 @@ def parse_csv(text: str):
         if len(vals) == len(header):
             rows.append(dict(zip(header, vals)))
         elif len(vals) > len(header):
-            # Message 字段含逗号导致多切了几段: 合并回 Message(index 13), 保住末尾的 base64 列
             extra = len(vals) - len(header)
             fixed = vals[:13] + [",".join(vals[13:14 + extra])] + vals[14 + extra:]
             if len(fixed) == len(header):
                 rows.append(dict(zip(header, fixed)))
     return rows
+
+
+def tcp_reachable(ip, port, timeout=TCP_TIMEOUT):
+    """测试 TCP 端口是否可达，返回 (可达, 延迟ms)"""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        t0 = time.time()
+        sock.connect((ip, port))
+        latency = (time.time() - t0) * 1000
+        sock.close()
+        return True, round(latency, 1)
+    except Exception:
+        return False, 9999
 
 
 def to_node(d: dict):
@@ -103,19 +136,97 @@ def to_node(d: dict):
         node["cipher"] = cm.group(1)
     if am:
         node["auth"] = am.group(1)
-    # vpngate 匿名认证: 缺少 username/password 时 mihomo 会拒载节点
     node["username"] = "vpn"
     node["password"] = "vpn"
     node["ca"] = ca.group(1).replace("\r\n", "\n").replace("\r", "\n").strip()
     try:
         speed = float(d.get("Speed", 0) or 0) / 1e6
-        speed_s = f"{speed:.1f}Mbps" if speed < 1000 else f"{speed/1000:.1f}Gbps"
-    except ValueError:
-        speed_s = "?"
-    note = (f"# score={d.get('Score', '?')} ping={d.get('Ping', '?')}ms "
-            f"speed={speed_s} uptime_min={d.get('Uptime', '?')} "
-            f"country={country}")
-    return node, note
+    except (ValueError, TypeError):
+        speed = 0
+    try:
+        ping = float(d.get("Ping", 9999) or 9999)
+    except (ValueError, TypeError):
+        ping = 9999
+    try:
+        score = int(d.get("Score", 0) or 0)
+    except (ValueError, TypeError):
+        score = 0
+    try:
+        uptime = int(d.get("Uptime", 0) or 0)
+    except (ValueError, TypeError):
+        uptime = 0
+    return node, ping, speed, score, uptime
+
+
+def composite_score(ping, speed, vpngate_score):
+    """综合评分 0~1, 越高越好"""
+    ping_norm = max(0, (250 - ping) / 250)       # ping 250ms 以下线性衰减
+    speed_norm = min(1, speed / 300)             # 300Mbps 封顶
+    score_norm = min(1, vpngate_score / 5000000) # 5M 分数封顶
+    return ping_norm * W_PING + speed_norm * W_SPEED + score_norm * W_SCORE
+
+
+def test_nodes(nodes):
+    """对节点列表做 TCP 可达性检测, 返回带检测结果的列表"""
+    results = []
+    tasks = {}
+    with ThreadPoolExecutor(max_workers=TCP_TEST_MAX) as pool:
+        for node, ping, speed, score, uptime in nodes:
+            ip = node["server"]
+            port = node["port"]
+            future = pool.submit(tcp_reachable, ip, port)
+            tasks[future] = (node, ping, speed, score, uptime)
+        for future in as_completed(tasks):
+            node, ping, speed, score, uptime = tasks[future]
+            reachable, tcp_latency = future.result()
+            results.append({
+                "node": node,
+                "ping": ping,
+                "speed": speed,
+                "score": score,
+                "uptime": uptime,
+                "tcp_ok": reachable,
+                "tcp_latency": tcp_latency,
+                "composite": composite_score(
+                    ping if ping < 9999 else tcp_latency,
+                    speed,
+                    score,
+                ),
+            })
+    return results
+
+
+def filter_and_sort(results):
+    """筛选 + 排序, 返回 [(node, note), ...]"""
+    filtered = []
+    for r in results:
+        node = r["node"]
+        ping = r["ping"] if r["ping"] < 9999 else r["tcp_latency"]
+        speed = r["speed"]
+        score = r["score"]
+
+        # 阈值筛选
+        if ping > PING_MAX_MS:
+            continue
+        if speed < SPEED_MIN_MBPS:
+            continue
+        if score < SCORE_MIN:
+            continue
+        if not r["tcp_ok"]:
+            continue
+
+        country = node["name"].split("-")[1]
+        uptime_days = r["uptime"] / 1440
+        note = (
+            f"# score={score} ping={ping:.0f}ms "
+            f"speed={speed:.1f}Mbps uptime={uptime_days:.0f}天 "
+            f"country={country}"
+        )
+        filtered.append((node, note, r["composite"]))
+
+    # 按综合评分降序
+    filtered.sort(key=lambda x: x[2], reverse=True)
+    return [(n, nt) for n, nt, _ in filtered]
 
 
 def dump(path: str, nodes):
@@ -123,8 +234,7 @@ def dump(path: str, nodes):
     for node, note in nodes:
         lines.append(f"  {note}")
         body = yaml.dump([node], Dumper=_Dumper, allow_unicode=True,
-                         sort_keys=False, default_flow_style=False,
-                         width=4096).rstrip()
+                         sort_keys=False, default_flow_style=False, width=4096).rstrip()
         indented = "\n".join("  " + l if l.strip() else l for l in body.split("\n"))
         lines.append(indented)
     with open(path, "w", encoding="utf-8") as f:
@@ -135,29 +245,48 @@ def main():
     text = fetch_csv()
     rows = parse_csv(text)
     print(f"CSV 行数: {len(rows)}")
-    by_region = {r: [] for r in REGIONS}
-    all_nodes = []
+
+    # 解析所有节点
+    nodes = []
     for d in rows:
         made = to_node(d)
         if not made:
             continue
-        node, note = made
+        node, ping, speed, score, uptime = made
+        nodes.append((node, ping, speed, score, uptime))
+    print(f"解析成功: {len(nodes)} 节点")
+
+    # TCP 可达性检测
+    print("TCP 可达性检测中...")
+    results = test_nodes(nodes)
+    reachable = sum(1 for r in results if r["tcp_ok"])
+    print(f"TCP 可达: {reachable}/{len(results)}")
+
+    # 筛选 + 排序
+    sorted_nodes = filter_and_sort(results)
+    print(f"筛选后: {len(sorted_nodes)} 节点")
+
+    by_region = {r: [] for r in REGIONS}
+    all_nodes = []
+    for node, note in sorted_nodes:
         all_nodes.append((node, note))
         c = node["name"].split("-")[1]
         if c in by_region:
             by_region[c].append((node, note))
-    # 全池按 score 降序(仅当需要全量文件时生成)
-    all_nodes.sort(key=lambda x: int(x[1].split("score=")[1].split(" ")[0]) if "score=" in x[1] else 0, reverse=True)
+
+    # 全量
     if OUT_ALL:
         cut = all_nodes[:MAX_NODES["ALL"]]
         dump(OUT_ALL, cut)
         print(f"{OUT_ALL}: {len(cut)} 节点")
+
+    # 分地区
     for region, lst in by_region.items():
-        lst.sort(key=lambda x: int(x[1].split("score=")[1].split(" ")[0]) if "score=" in x[1] else 0, reverse=True)
         path = f"vpngate-{region.lower()}.yaml"
         cut = lst[:MAX_NODES.get(region, 999)]
         dump(path, cut)
         print(f"{path}: {len(cut)} 节点")
+
     total = sum(len(v) for v in by_region.values())
     if len(all_nodes) < 2:
         raise SystemExit("节点不足 2 个, 判定抓取失败")
