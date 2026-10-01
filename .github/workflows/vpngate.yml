@@ -2,8 +2,8 @@ name: vpngate-csv2clash
 
 on:
   schedule:
-    - cron: '*/25 * * * *'   # 25 分钟一刷
-  workflow_dispatch:          # 允许手动点按钮跑
+    - cron: '17 */4 * * *'    # 每 4 小时一刷(错开整点, 避开 CF 构建高峰)
+  workflow_dispatch:            # 允许手动点按钮跑
 
 jobs:
   fetch-convert:
