@@ -245,6 +245,7 @@ def dump(path: str, nodes):
 
 
 def main():
+    os.makedirs("dist", exist_ok=True)
     text = fetch_csv()
     rows = parse_csv(text)
     print(f"CSV 行数: {len(rows)}")
@@ -280,12 +281,12 @@ def main():
     # 全量
     if OUT_ALL:
         cut = all_nodes[:MAX_NODES["ALL"]]
-        dump(OUT_ALL, cut)
-        print(f"{OUT_ALL}: {len(cut)} 节点")
+        dump(f"dist/{OUT_ALL}", cut)
+        print(f"dist/{OUT_ALL}: {len(cut)} 节点")
 
     # 分地区
     for region, lst in by_region.items():
-        path = f"vpngate-{region.lower()}.yaml"
+        path = f"dist/vpngate-{region.lower()}.yaml"
         cut = lst[:MAX_NODES.get(region, 999)]
         dump(path, cut)
         print(f"{path}: {len(cut)} 节点")
