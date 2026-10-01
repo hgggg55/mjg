@@ -1,0 +1,78 @@
+# Mihomo proxy-providers 配置 — mjg VPNGate 节点
+#
+# 复制到你的 Mihomo 配置 yaml 顶层(和 proxy-groups 同级)
+#
+# 说明: jsDelivr CDN 托管 GitHub 仓库文件, 国内可直连, 无需翻墙,
+#       缓存自动刷新(GH Actions 每 4 小时更新仓库, CDN 约 12h 内同步)
+#
+# 备用源(fastly 节点):
+#   https://fastly.jsdelivr.net/gh/hgggg55/mjg@main/dist/<file>
+# 备用源(GitHub raw, 墙内不稳定):
+#   https://raw.githubusercontent.com/hgggg55/mjg/main/dist/<file>
+
+proxy-providers:
+  VG-JP:
+    type: http
+    url: https://cdn.jsdelivr.net/gh/hgggg55/mjg@main/dist/vpngate-jp.yaml
+    path: ./proxy_providers/vg-jp.yaml
+    interval: 21600      # 每 6 小时刷新
+    health-check:
+      enable: true
+      url: http://www.gstatic.com/generate_204
+      interval: 300
+
+  VG-KR:
+    type: http
+    url: https://cdn.jsdelivr.net/gh/hgggg55/mjg@main/dist/vpngate-kr.yaml
+    path: ./proxy_providers/vg-kr.yaml
+    interval: 21600
+    health-check:
+      enable: true
+      url: http://www.gstatic.com/generate_204
+      interval: 300
+
+  VG-ALL:
+    type: http
+    url: https://cdn.jsdelivr.net/gh/hgggg55/mjg@main/dist/vpngate.yaml
+    path: ./proxy_providers/vg-all.yaml
+    interval: 21600
+    health-check:
+      enable: true
+      url: http://www.gstatic.com/generate_204
+      interval: 300
+
+proxy-groups:
+  # 日本自动选择
+  - name: VG-JP-Auto
+    type: url-test
+    use:
+      - VG-JP
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 50
+
+  # 韩国自动选择
+  - name: VG-KR-Auto
+    type: url-test
+    use:
+      - VG-KR
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 50
+
+  # 全量自动选择(兜底)
+  - name: VG-ALL-Auto
+    type: url-test
+    use:
+      - VG-ALL
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 50
+
+  # 最终出口: 手动在三个地区组里挑
+  - name: VG-Proxy
+    type: select
+    proxies:
+      - VG-JP-Auto
+      - VG-KR-Auto
+      - VG-ALL-Auto
